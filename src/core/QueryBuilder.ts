@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { IDatabaseAdapter, TableDefinition } from './Table';
-import { InferZod, IServiceBroker, ReactiveState } from 'isomorphic-core';
+import { InferZod, IServiceBroker, ReactiveState, ContextStack } from 'isomorphic-core';
 
 export type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=';
 
@@ -155,15 +155,70 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
         return state.data;
     }
 
+    private static queryQueue: Map<string, { sql: string, params: any[], resolve: (val: any) => void }[]> = new Map();
+
+    /**
+     * Optimistic UI: Immediately updates the local reactive state before persistence.
+     */
+    async insertOptimistic(data: Partial<z.infer<T>>, localState: ReactiveState<any>, path: string): Promise<void> {
+        const validated = this.table.schema.partial().parse(data);
+        const original = JSON.parse(JSON.stringify(localState.data));
+        
+        // Push to local state
+        const target = path.split('.').reduce((acc, part) => acc[part], localState.data as any);
+        if (Array.isArray(target)) {
+            target.push(validated);
+        }
+
+        try {
+            await this.insert(data);
+        } catch (err) {
+            // Rollback on failure
+            localState.data = original;
+            throw err;
+        }
+    }
+
+    /**
+     * Transaction Context: Ensures nested calls use the same transaction.
+     */
+    public async transaction<R>(fn: (qb: this) => Promise<R>): Promise<R> {
+        const ctx = this.broker?.getContext() || ContextStack.getContext();
+        const existingTx = (ctx?.meta as any)?._tx;
+
+        if (existingTx) {
+            return await fn(this);
+        }
+
+        if (!this.adapter.transaction) {
+            return await fn(this);
+        }
+
+        return await this.adapter.transaction(async () => {
+            // Create a new context with the transaction handle
+            const txCtx = {
+                ...ctx,
+                meta: { ...ctx?.meta, _tx: true }
+            } as any;
+
+            return await ContextStack.run(txCtx, () => fn(this));
+        });
+    }
+
+    /**
+     * Query Debouncing: Batch rapid SELECTs to reduce WASM overhead.
+     */
+    private async executeDebounced(): Promise<R[]> {
+        const key = `${this.table.name}:${JSON.stringify(this.filters)}`;
+        // Future implementation: wait 10ms, group same queries
+        return this.execute();
+    }
+
     /**
      * Batch execution to reduce WASM overhead.
      */
     public async batch(operations: (qb: this) => Promise<void>): Promise<void> {
-        // Simple implementation: wrap in transaction if supported by adapter
-        if (this.adapter.transaction) {
-            return this.adapter.transaction(() => operations(this));
-        }
-        return operations(this);
+        return this.transaction(operations);
     }
 
     private notifyMutation(type: string): void {
@@ -206,7 +261,7 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
     }
 
     private getTenantId(): string | undefined {
-        const context = this.broker?.getContext();
+        const context = this.broker?.getContext() || ContextStack.getContext();
         const meta = context?.meta as any;
         const dynamicTenantId = meta?.user?.tenant_id || meta?.tenant_id;
         return this.tenantIdOverride || dynamicTenantId;

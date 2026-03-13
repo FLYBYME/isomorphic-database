@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { QueryBuilder, TableSchema } from './QueryBuilder';
 import { IDatabaseAdapter, TableDefinition } from './Table';
-import { IServiceBroker } from 'isomorphic-core';
+import { IServiceBroker, ContextStack } from 'isomorphic-core';
 
 /**
  * BaseRepository — A generic CRUD layer with automatic tenant isolation.
@@ -30,9 +30,7 @@ export class BaseRepository<T extends z.ZodObject<any>> {
      * Extracts the tenant_id from the active ServiceBroker context.
      */
     protected getTenantId(): string | undefined {
-        if (!this.broker) return undefined;
-        
-        const ctx = this.broker.getContext();
+        const ctx = this.broker?.getContext() || ContextStack.getContext();
         if (!ctx) return undefined;
 
         // Try different meta paths for tenant identity
