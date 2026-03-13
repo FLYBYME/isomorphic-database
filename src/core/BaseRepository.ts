@@ -59,7 +59,7 @@ export class BaseRepository<T extends z.ZodObject<any>> {
             }
         }
 
-        return await qb.execute();
+        return await qb.execute() as unknown as TableSchema<T>[];
     }
 
     /**
@@ -67,7 +67,7 @@ export class BaseRepository<T extends z.ZodObject<any>> {
      */
     async update(id: string | number, data: Partial<TableSchema<T>>): Promise<void> {
         await this.builder()
-            .where('id' as any, '=', id)
+            .where('id' as any, '=', id as any)
             .update(data);
     }
 
@@ -76,7 +76,7 @@ export class BaseRepository<T extends z.ZodObject<any>> {
      */
     async remove(id: string | number): Promise<void> {
         await this.builder()
-            .where('id' as any, '=', id)
+            .where('id' as any, '=', id as any)
             .delete();
     }
 
