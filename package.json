@@ -1,0 +1,17 @@
+{
+  "name": "isomorphic-database",
+  "version": "1.0.0",
+  "description": "Type-safe isomorphic database query builder",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "isomorphic-core": "file:../isomorphic-core",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
