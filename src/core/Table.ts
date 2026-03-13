@@ -6,6 +6,7 @@ import { z } from 'zod';
 export interface IDatabaseAdapter {
     query<T = any>(sql: string, params: any[]): Promise<T[]>;
     run(sql: string, params: any[]): Promise<{ lastInsertId?: number | string; changes: number }>;
+    transaction?<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 /**

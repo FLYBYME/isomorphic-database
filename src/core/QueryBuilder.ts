@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { IDatabaseAdapter, TableDefinition } from './Table';
-import { InferZod, IServiceBroker } from 'isomorphic-core';
+import { InferZod, IServiceBroker, ReactiveState } from 'isomorphic-core';
 
 export type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=';
 
@@ -89,6 +89,8 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
         
         const sql = `INSERT INTO ${this.table.name} (${keys.join(', ')}) VALUES (${placeholders})`;
         const res = await this.adapter.run(sql, values);
+        
+        this.notifyMutation('insert');
         return { id: res.lastInsertId };
     }
 
@@ -113,6 +115,8 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
         }
 
         const res = await this.adapter.run(sql, params);
+        
+        this.notifyMutation('update');
         return { changes: res.changes };
     }
 
@@ -126,7 +130,50 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
         }
 
         const res = await this.adapter.run(sql, whereParams);
+        
+        this.notifyMutation('delete');
         return { changes: res.changes };
+    }
+
+    /**
+     * Live Query Bridge.
+     * Returns a results set that automatically stays in sync via $db.mutated events.
+     */
+    public liveQuery(): { results: R[] } {
+        const state = new ReactiveState<{ results: R[] }>({ results: [] });
+
+        const refresh = async () => {
+            state.data.results = await this.execute();
+        };
+
+        // Initial fetch
+        refresh();
+
+        // Subscribe to global mutation events for this table
+        const unsub = this.broker?.on(`$db.${this.table.name}.mutated`, () => refresh());
+        
+        return state.data;
+    }
+
+    /**
+     * Batch execution to reduce WASM overhead.
+     */
+    public async batch(operations: (qb: this) => Promise<void>): Promise<void> {
+        // Simple implementation: wrap in transaction if supported by adapter
+        if (this.adapter.transaction) {
+            return this.adapter.transaction(() => operations(this));
+        }
+        return operations(this);
+    }
+
+    private notifyMutation(type: string): void {
+        if (this.broker) {
+            this.broker.emit(`$db.${this.table.name}.mutated`, { 
+                type, 
+                table: this.table.name,
+                tenantId: this.getTenantId()
+            } as any);
+        }
     }
 
     /** Finalize and execute the SELECT query */
@@ -159,8 +206,9 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
     }
 
     private getTenantId(): string | undefined {
-        const dynamicTenantId = this.broker?.getContext()?.meta?.user?.tenant_id 
-            || (this.broker?.getContext()?.meta as any)?.tenant_id;
+        const context = this.broker?.getContext();
+        const meta = context?.meta as any;
+        const dynamicTenantId = meta?.user?.tenant_id || meta?.tenant_id;
         return this.tenantIdOverride || dynamicTenantId;
     }
 
