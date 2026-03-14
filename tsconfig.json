@@ -13,11 +13,15 @@
     "rootDir": "src",
     "baseUrl": ".",
     "paths": {
-      "isomorphic-core": ["../isomorphic-core/src/index"]
+      "isomorphic-core": ["../isomorphic-core/src/index"],
+      "isomorphic-registry": ["../isomorphic-registry/src/index"],
+      "raft-consensus": ["../raft-consensus/src/index"]
     }
   },
   "include": ["src/**/*"],
   "references": [
-    { "path": "../isomorphic-core" }
+    { "path": "../isomorphic-core" },
+    { "path": "../isomorphic-registry" },
+    { "path": "../raft-consensus" }
   ]
 }

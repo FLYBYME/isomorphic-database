@@ -222,45 +222,6 @@ describe('Database Tests', () => {
             );
         });
 
-        it('liveQuery should create ReactiveState and subscribe to mutations', () => {
-            const lq = qb.liveQuery();
-            expect(lq).toHaveProperty('results');
-            expect(mockBroker.on).toHaveBeenCalledWith('$db.users.mutated', expect.any(Function));
-            
-            // Trigger the subscription callback
-            const callback = mockBroker.on.mock.calls[0][1];
-            callback();
-            expect(mockAdapter.query).toHaveBeenCalledTimes(2); // 1 initial + 1 from callback
-        });
-
-        it('insertOptimistic should update local state and insert', async () => {
-            const { ReactiveState } = require('isomorphic-core');
-            const localState = new ReactiveState({ users: [{ name: 'Old' }] });
-            
-            await qb.insertOptimistic({ name: 'New' }, localState, 'users');
-            
-            expect(localState.data.users).toEqual([{ name: 'Old' }, { name: 'New' }]);
-            expect(mockAdapter.run).toHaveBeenCalled();
-        });
-
-        it('insertOptimistic should rollback on failure', async () => {
-            const { ReactiveState } = require('isomorphic-core');
-            const localState = new ReactiveState({ users: [{ name: 'Old' }] });
-            
-            mockAdapter.run.mockRejectedValue(new Error('DB Error'));
-            
-            await expect(qb.insertOptimistic({ name: 'Fail' }, localState, 'users')).rejects.toThrow('DB Error');
-            expect(localState.data.users).toEqual([{ name: 'Old' }]); // Rolled back
-        });
-        
-        it('insertOptimistic should handle non-array targets', async () => {
-            const { ReactiveState } = require('isomorphic-core');
-            const localState = new ReactiveState({ obj: { nested: {} } });
-            await qb.insertOptimistic({ name: 'Test' }, localState, 'obj.nested');
-            // Shouldn't crash, target is not array
-            expect(mockAdapter.run).toHaveBeenCalled();
-        });
-
         it('transaction should reuse existing transaction context', async () => {
             mockBroker.getContext.mockReturnValue({ meta: { _tx: true } });
             const fn = jest.fn().mockResolvedValue('ok');

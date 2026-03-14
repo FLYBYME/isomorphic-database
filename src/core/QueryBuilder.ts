@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { IDatabaseAdapter, TableDefinition } from './Table';
-import { InferZod, IServiceBroker, ReactiveState, ContextStack } from 'isomorphic-core';
+import { InferZod, IServiceBroker, ContextStack } from 'isomorphic-core';
 
 export type FilterOperator = '=' | '!=' | '>' | '<' | '>=' | '<=';
 
@@ -135,49 +135,7 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
         return { changes: res.changes };
     }
 
-    /**
-     * Live Query Bridge.
-     * Returns a results set that automatically stays in sync via $db.mutated events.
-     */
-    public liveQuery(): { results: R[] } {
-        const state = new ReactiveState<{ results: R[] }>({ results: [] });
-
-        const refresh = async () => {
-            state.data.results = await this.execute();
-        };
-
-        // Initial fetch
-        refresh();
-
-        // Subscribe to global mutation events for this table
-        const unsub = this.broker?.on(`$db.${this.table.name}.mutated`, () => refresh());
-        
-        return state.data;
-    }
-
     private static queryQueue: Map<string, { sql: string, params: unknown[], resolve: (val: unknown) => void }[]> = new Map();
-
-    /**
-     * Optimistic UI: Immediately updates the local reactive state before persistence.
-     */
-    async insertOptimistic(data: Partial<z.infer<T>>, localState: ReactiveState<any>, path: string): Promise<void> {
-        const validated = this.table.schema.partial().parse(data);
-        const original = JSON.parse(JSON.stringify(localState.data));
-        
-        // Push to local state
-        const target = path.split('.').reduce((acc, part) => acc[part], localState.data as any);
-        if (Array.isArray(target)) {
-            target.push(validated);
-        }
-
-        try {
-            await this.insert(data);
-        } catch (err) {
-            // Rollback on failure
-            localState.data = original;
-            throw err;
-        }
-    }
 
     /**
      * Transaction Context: Ensures nested calls use the same transaction.

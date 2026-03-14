@@ -1,18 +1,7 @@
 import { z } from 'zod';
+import { IDatabaseAdapter, DatabaseResult } from '../interfaces/IDatabaseAdapter';
 
-export interface DatabaseResult {
-    lastInsertId?: number | string;
-    changes: number;
-}
-
-/**
- * IDatabaseAdapter — Abstract interface for pluggable database engines.
- */
-export interface IDatabaseAdapter {
-    query<T = unknown>(sql: string, params: unknown[]): Promise<T[]>;
-    run(sql: string, params: unknown[]): Promise<DatabaseResult>;
-    transaction?<T>(fn: () => Promise<T>): Promise<T>;
-}
+export { IDatabaseAdapter, DatabaseResult };
 
 /**
  * TableDefinition — Stores the metadata and schema for a table.
