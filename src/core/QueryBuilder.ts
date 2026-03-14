@@ -18,7 +18,7 @@ export type ColumnOf<T extends z.ZodObject<any>> = keyof TableSchema<T>;
 interface Filter {
     column: string;
     operator: FilterOperator;
-    value: any;
+    value: unknown;
 }
 
 /**
@@ -47,7 +47,7 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
     /** Select specific columns */
     select<K extends ColumnOf<T>>(columns: K[]): QueryBuilder<T, Pick<TableSchema<T>, K>> {
         this.selectedColumns = columns as string[];
-        return this as any;
+        return this as unknown as QueryBuilder<T, Pick<TableSchema<T>, K>>;
     }
 
     /** Add a where clause with type-safe value checking */
@@ -99,7 +99,7 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
         const validated = this.table.schema.partial().parse(data);
         
         const sets: string[] = [];
-        const params: any[] = [];
+        const params: unknown[] = [];
 
         for (const [key, val] of Object.entries(validated)) {
             sets.push(`${key} = ?`);
@@ -155,7 +155,7 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
         return state.data;
     }
 
-    private static queryQueue: Map<string, { sql: string, params: any[], resolve: (val: any) => void }[]> = new Map();
+    private static queryQueue: Map<string, { sql: string, params: unknown[], resolve: (val: unknown) => void }[]> = new Map();
 
     /**
      * Optimistic UI: Immediately updates the local reactive state before persistence.
@@ -227,7 +227,7 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
                 type, 
                 table: this.table.name,
                 tenantId: this.getTenantId()
-            } as any);
+            } as unknown as any);
         }
     }
 
@@ -248,7 +248,7 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
             sql += ` OFFSET ${this.offsetValue}`;
         }
 
-        const rows = await this.adapter.query<any>(sql, whereParams);
+        const rows = await this.adapter.query<unknown>(sql, whereParams);
 
         // Task 15: Perform runtime validation (optional mapping)
         // If we selected specific columns, we can't use the full schema validation
@@ -267,9 +267,9 @@ export class QueryBuilder<T extends z.ZodObject<any>, R = z.infer<T>> {
         return this.tenantIdOverride || dynamicTenantId;
     }
 
-    private buildWhereClause(): { whereClause: string; whereParams: any[] } {
+    private buildWhereClause(): { whereClause: string; whereParams: unknown[] } {
         const clauses: string[] = [];
-        const params: any[] = [];
+        const params: unknown[] = [];
 
         // Integrated Multi-Tenancy (Task 14)
         if (this.enforceTenancy) {

@@ -1,11 +1,16 @@
 import { z } from 'zod';
 
+export interface DatabaseResult {
+    lastInsertId?: number | string;
+    changes: number;
+}
+
 /**
  * IDatabaseAdapter — Abstract interface for pluggable database engines.
  */
 export interface IDatabaseAdapter {
-    query<T = any>(sql: string, params: any[]): Promise<T[]>;
-    run(sql: string, params: any[]): Promise<{ lastInsertId?: number | string; changes: number }>;
+    query<T = unknown>(sql: string, params: unknown[]): Promise<T[]>;
+    run(sql: string, params: unknown[]): Promise<DatabaseResult>;
     transaction?<T>(fn: () => Promise<T>): Promise<T>;
 }
 

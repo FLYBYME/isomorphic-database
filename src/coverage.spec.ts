@@ -23,7 +23,7 @@ jest.mock('isomorphic-core', () => {
 describe('Database Tests', () => {
     let mockAdapter: any;
     let mockBroker: any;
-    let schema: any;
+    let schema: z.ZodObject<any>;
     let table: any;
 
     beforeEach(() => {
@@ -71,34 +71,34 @@ describe('Database Tests', () => {
 
         it('should extract tenant_id from broker context user', () => {
             mockBroker.getContext.mockReturnValue({ meta: { user: { tenant_id: 'tenant-1' } } });
-            const tenantId = (repo as any).getTenantId();
+            const tenantId = (repo as unknown as { getTenantId(): string }).getTenantId();
             expect(tenantId).toBe('tenant-1');
         });
 
         it('should extract tenant_id from broker context meta', () => {
             mockBroker.getContext.mockReturnValue({ meta: { tenant_id: 'tenant-2' } });
-            const tenantId = (repo as any).getTenantId();
+            const tenantId = (repo as unknown as { getTenantId(): string }).getTenantId();
             expect(tenantId).toBe('tenant-2');
         });
 
         it('should fallback to ContextStack if broker is undefined', () => {
             const repoNoBroker = new BaseRepository('users', schema, mockAdapter);
             (ContextStack.getContext as jest.Mock).mockReturnValue({ meta: { tenant_id: 'tenant-3' } });
-            const tenantId = (repoNoBroker as any).getTenantId();
+            const tenantId = (repoNoBroker as unknown as { getTenantId(): string }).getTenantId();
             expect(tenantId).toBe('tenant-3');
         });
 
         it('should return undefined tenant_id if no context', () => {
             mockBroker.getContext.mockReturnValue(undefined);
             (ContextStack.getContext as jest.Mock).mockReturnValue(undefined);
-            const tenantId = (repo as any).getTenantId();
+            const tenantId = (repo as unknown as { getTenantId(): string }).getTenantId();
             expect(tenantId).toBeUndefined();
         });
 
         it('create should validate and insert data', async () => {
             mockAdapter.run.mockResolvedValue({ lastInsertId: 42 });
             const data = { name: 'Alice', age: 30 };
-            const result = await repo.create(data as any);
+            const result = await repo.create(data as unknown as any);
             expect(result).toEqual({ name: 'Alice', age: 30, id: 42 });
             expect(mockAdapter.run).toHaveBeenCalledWith(
                 'INSERT INTO users (name, age) VALUES (?, ?)',
@@ -108,7 +108,7 @@ describe('Database Tests', () => {
 
         it('find should execute query with filters', async () => {
             mockAdapter.query.mockResolvedValue([{ id: 1, name: 'Bob' }]);
-            const results = await repo.find({ name: 'Bob' } as any);
+            const results = await repo.find({ name: 'Bob' } as unknown as Partial<z.infer<typeof schema>>);
             expect(results).toEqual([{ id: 1, name: 'Bob' }]);
             expect(mockAdapter.query).toHaveBeenCalledWith(
                 'SELECT * FROM users WHERE name = ?',
@@ -118,7 +118,7 @@ describe('Database Tests', () => {
 
         it('find should handle undefined filters', async () => {
             mockAdapter.query.mockResolvedValue([]);
-            await repo.find({ name: 'Bob', age: undefined } as any);
+            await repo.find({ name: 'Bob', age: undefined } as unknown as Partial<z.infer<typeof schema>>);
             expect(mockAdapter.query).toHaveBeenCalledWith(
                 'SELECT * FROM users WHERE name = ?',
                 ['Bob']
@@ -126,7 +126,7 @@ describe('Database Tests', () => {
         });
 
         it('update should execute query with id filter', async () => {
-            await repo.update(1, { age: 31 } as any);
+            await repo.update(1, { age: 31 } as unknown as Partial<z.infer<typeof schema>>);
             expect(mockAdapter.run).toHaveBeenCalledWith(
                 'UPDATE users SET age = ? WHERE id = ?',
                 [31, 1]
@@ -153,11 +153,11 @@ describe('Database Tests', () => {
 
         it('findOne should return a single record or null', async () => {
             mockAdapter.query.mockResolvedValue([{ id: 1, name: 'Charlie' }]);
-            let res = await repo.findOne({ name: 'Charlie' } as any);
+            let res = await repo.findOne({ name: 'Charlie' } as unknown as Partial<z.infer<typeof schema>>);
             expect(res).toEqual({ id: 1, name: 'Charlie' });
 
             mockAdapter.query.mockResolvedValue([]);
-            res = await repo.findOne({ name: 'Dave' } as any);
+            res = await repo.findOne({ name: 'Dave' } as unknown as Partial<z.infer<typeof schema>>);
             expect(res).toBeNull();
         });
     });
@@ -171,11 +171,11 @@ describe('Database Tests', () => {
 
         it('should set tenantIdOverride', () => {
             qb.forTenant('custom-tenant');
-            expect((qb as any).tenantIdOverride).toBe('custom-tenant');
+            expect((qb as unknown as { tenantIdOverride: string }).tenantIdOverride).toBe('custom-tenant');
         });
 
         it('should set selected columns', async () => {
-            qb.select(['id', 'name'] as any);
+            qb.select(['id', 'name'] as unknown as never[]);
             mockAdapter.query.mockResolvedValue([{ id: 1, name: 'Eve' }]);
             const res = await qb.execute();
             expect(res).toEqual([{ id: 1, name: 'Eve' }]);
@@ -290,12 +290,12 @@ describe('Database Tests', () => {
 
         it('executeDebounced should execute query', async () => {
             mockAdapter.query.mockResolvedValue([{ id: 1, name: 'Debounced' }]);
-            const res = await (qb as any).executeDebounced();
+            const res = await (qb as unknown as { executeDebounced(): Promise<unknown[]> }).executeDebounced();
             expect(res).toEqual([{ id: 1, name: 'Debounced' }]);
         });
 
         it('batch should wrap operations in transaction', async () => {
-            const spy = jest.spyOn(qb, 'transaction').mockResolvedValue(undefined as any);
+            const spy = jest.spyOn(qb, 'transaction').mockResolvedValue(undefined as never);
             const fn = jest.fn();
             await qb.batch(fn);
             expect(spy).toHaveBeenCalledWith(fn);
